@@ -1,0 +1,10 @@
+# AMSHA — Adaptive Multi-Scale Head Activation
+model: yolov12n
+idea: amsha
+pretrained: yolo12n.pt
+epochs: 120
+batch_size: 16
+name: yolov12n_amsha
+# AMSHA-specific
+amsha_threshold: 0.5
+amsha_conservative: true

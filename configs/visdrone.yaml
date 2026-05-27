@@ -1,0 +1,30 @@
+# =============================================================================
+# VisDrone2019 Dataset Configuration (YOLO format)
+# Chuẩn bị dataset: chạy scripts/prepare_visdrone.py
+# =============================================================================
+
+path: datasets/visdrone      # root directory của dataset (relative to project root)
+train: train/images          # thư mục ảnh train
+val:   val/images            # thư mục ảnh val
+test:  test/images           # thư mục ảnh test (VisDrone2019-DET-test-challenge)
+
+# ── Classes ──────────────────────────────────────────────────────────────────
+nc: 10
+names:
+  0: pedestrian
+  1: people
+  2: bicycle
+  3: car
+  4: van
+  5: truck
+  6: tricycle
+  7: awning-tricycle
+  8: bus
+  9: motor
+
+# ── Dataset Statistics (tham khảo) ──────────────────────────────────────────
+# train:  6,471 images  | ~392K instances
+# val:      548 images  | ~33K instances
+# test:   1,610 images  | annotations không public
+# resolution: 480×360 đến 2000×1500
+# challenge: small + dense + multi-scale objects

@@ -1,0 +1,43 @@
+# =====================
+# Datasets — không push lên git
+# =====================
+datasets/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model weights & checkpoints
+*.pt
+*.pth
+*.onnx
+*.engine
+*.tflite
+runs/
+
+# Logs & outputs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

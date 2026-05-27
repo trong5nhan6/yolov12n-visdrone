@@ -1,0 +1,7 @@
+# Baseline experiment — YOLOv12n vanilla trên VisDrone
+model: yolov12n
+idea: baseline
+pretrained: yolo12n.pt
+epochs: 100
+batch_size: 16
+name: yolov12n_baseline

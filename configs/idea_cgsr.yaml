@@ -1,0 +1,11 @@
+# CGSR — Confidence-Guided Selective Re-detection
+model: yolov12n
+idea: cgsr
+pretrained: yolo12n.pt
+epochs: 100
+batch_size: 16
+name: yolov12n_cgsr
+# CGSR-specific
+cgsr_conf_threshold: 0.6
+cgsr_patch_size: 160
+cgsr_max_patches: 3

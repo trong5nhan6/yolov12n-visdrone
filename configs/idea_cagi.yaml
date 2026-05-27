@@ -1,0 +1,12 @@
+# CAGI — Complexity-Aware Gated Inference
+model: yolov12n
+idea: cagi
+pretrained: yolo12n.pt
+epochs: 120
+batch_size: 16
+name: yolov12n_cagi
+# CAGI-specific
+cagi_easy_threshold: 0.4
+cagi_hard_threshold: 0.7
+cagi_scp_hidden_dim: 64
+cagi_budget_lambda: 0.1

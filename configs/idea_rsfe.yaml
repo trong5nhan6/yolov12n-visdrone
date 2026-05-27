@@ -1,0 +1,10 @@
+# RSFE — Region-Wise Sparse Feature Enhancement
+model: yolov12n
+idea: rsfe
+pretrained: yolo12n.pt
+epochs: 120
+batch_size: 16
+name: yolov12n_rsfe
+# RSFE-specific
+rsfe_topk_ratio: 0.25
+rsfe_adaptive_k: false
