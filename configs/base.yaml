@@ -27,20 +27,21 @@ warmup_epochs: 3
 warmup_momentum: 0.8
 warmup_bias_lr: 0.1
 
-# ── Augmentation ─────────────────────────────────────────────────────────────
-hsv_h: 0.015
-hsv_s: 0.7
-hsv_v: 0.4
-degrees: 0.0
-translate: 0.1
-scale: 0.5
+# ── Augmentation — tuned for VisDrone (small + dense + aerial view) ──────────
+hsv_h: 0.015       # hue jitter nhẹ
+hsv_s: 0.7         # saturation jitter
+hsv_v: 0.4         # brightness jitter
+degrees: 0.0       # không rotate — drone view có hướng cố định
+translate: 0.2     # tăng từ 0.1: thêm positional variation
+scale: 0.9         # tăng từ 0.5: scale jitter mạnh → model thấy object nhỏ ở nhiều kích thước
 shear: 0.0
 perspective: 0.0
-flipud: 0.0
-fliplr: 0.5
-mosaic: 1.0
-mixup: 0.0
-copy_paste: 0.0
+flipud: 0.5        # tăng từ 0.0: drone không có up/down cố định → flip dọc hợp lệ
+fliplr: 0.5        # unchanged
+mosaic: 1.0        # giữ nguyên — quan trọng nhất với small objects
+mixup: 0.1         # tăng từ 0.0: blend 2 ảnh nhẹ giúp generalize
+copy_paste: 0.3    # tăng từ 0.0: copy objects sang ảnh khác → tăng density training
+close_mosaic: 20   # tăng từ 10: giữ mosaic lâu hơn trước khi tắt
 
 # ── Validation & Testing ──────────────────────────────────────────────────────
 val_split: val              # split dùng để validate sau mỗi epoch

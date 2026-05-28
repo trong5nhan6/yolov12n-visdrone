@@ -393,21 +393,32 @@ def main() -> None:
     project_dir     = cfg.get("project", "runs/train")
 
     extra_kwargs: dict = {
-        "workers":  int(cfg.get("workers",  4)),
-        "exist_ok": args.exist_ok,
-        "cache":    cfg.get("cache", False),
-        "close_mosaic": int(cfg.get("close_mosaic", 10)),
-        "mosaic":   float(cfg.get("mosaic", 1.0)),
-        "mixup":    float(cfg.get("mixup", 0.0)),
-        "copy_paste": float(cfg.get("copy_paste", 0.0)),
-        "patience": int(cfg.get("patience", 50)),
+        "workers":      int(cfg.get("workers", 4)),
+        "exist_ok":     args.exist_ok,
+        "cache":        cfg.get("cache", False),
+        "patience":     int(cfg.get("patience", 50)),
+        # ── Augmentation (tất cả forward để config có hiệu lực) ──────────────
+        "hsv_h":        float(cfg.get("hsv_h",       0.015)),
+        "hsv_s":        float(cfg.get("hsv_s",       0.7)),
+        "hsv_v":        float(cfg.get("hsv_v",       0.4)),
+        "degrees":      float(cfg.get("degrees",     0.0)),
+        "translate":    float(cfg.get("translate",   0.1)),
+        "scale":        float(cfg.get("scale",       0.5)),
+        "shear":        float(cfg.get("shear",       0.0)),
+        "perspective":  float(cfg.get("perspective", 0.0)),
+        "flipud":       float(cfg.get("flipud",      0.0)),
+        "fliplr":       float(cfg.get("fliplr",      0.5)),
+        "mosaic":       float(cfg.get("mosaic",      1.0)),
+        "mixup":        float(cfg.get("mixup",       0.0)),
+        "copy_paste":   float(cfg.get("copy_paste",  0.0)),
+        "close_mosaic": int(cfg.get("close_mosaic",  10)),
     }
 
     # Learning rate
-    if cfg.get("lr0"):       extra_kwargs["lr0"]  = float(cfg.lr0)
-    if cfg.get("lrf"):       extra_kwargs["lrf"]  = float(cfg.lrf)
-    if cfg.get("momentum"):  extra_kwargs["momentum"] = float(cfg.momentum)
-    if cfg.get("weight_decay"): extra_kwargs["weight_decay"] = float(cfg.weight_decay)
+    if cfg.get("lr0"):           extra_kwargs["lr0"]          = float(cfg.lr0)
+    if cfg.get("lrf"):           extra_kwargs["lrf"]          = float(cfg.lrf)
+    if cfg.get("momentum"):      extra_kwargs["momentum"]     = float(cfg.momentum)
+    if cfg.get("weight_decay"):  extra_kwargs["weight_decay"] = float(cfg.weight_decay)
     if cfg.get("warmup_epochs"): extra_kwargs["warmup_epochs"] = float(cfg.warmup_epochs)
     if cfg.get("label_smoothing"): extra_kwargs["label_smoothing"] = float(cfg.label_smoothing)
 
