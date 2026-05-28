@@ -220,11 +220,14 @@ class CAGIModel(BaseModel):
         logger.info(f"[CAGI] Load base model: {weights}")
         self._yolo = YOLO(weights or "yolo12n.pt")
 
-        self.easy_threshold:   float = self.cfg.get("cagi_easy_threshold",  0.4)
-        self.hard_threshold:   float = self.cfg.get("cagi_hard_threshold",  0.7)
-        self.budget_lambda:    float = self.cfg.get("cagi_budget_lambda",   0.1)
-        hidden_dim:            int   = self.cfg.get("cagi_scp_hidden_dim",  64)
-        self._gated_stage_idx: int   = self.cfg.get("cagi_gated_stage_idx", 4)
+        self.easy_threshold:   float         = self.cfg.get("cagi_easy_threshold",  0.4)
+        self.hard_threshold:   float         = self.cfg.get("cagi_hard_threshold",  0.7)
+        self.budget_lambda:    float         = self.cfg.get("cagi_budget_lambda",   0.1)
+        hidden_dim:            int           = self.cfg.get("cagi_scp_hidden_dim",  64)
+        self._gated_stage_idx: int           = self.cfg.get("cagi_gated_stage_idx", 4)
+        # Path tới best.pt của teacher đã train sẵn.
+        # Nếu được set và file tồn tại → bỏ qua stage 1, dùng luôn weights này.
+        self._teacher_weights: Optional[str] = self.cfg.get("cagi_teacher_weights", None)
 
         in_channels = self._get_stage1_channels()
         self.scp = SceneComplexityPredictor(
@@ -246,6 +249,56 @@ class CAGIModel(BaseModel):
         )
 
     # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def _resolve_teacher_weights(
+        self,
+        data: str,
+        epochs: int,
+        batch: int,
+        imgsz: int,
+        device: str,
+        project: str,
+        name: str,
+        kwargs: dict,
+    ) -> Optional[Path]:
+        """
+        Trả về Path tới teacher best.pt theo logic:
+          - cagi_teacher_weights được set và file tồn tại
+                → dùng luôn, bỏ qua stage 1
+          - cagi_teacher_weights được set nhưng file KHÔNG tồn tại
+                → báo lỗi rõ ràng, dừng lại (không train nhầm từ đầu)
+          - cagi_teacher_weights = None
+                → train stage 1 từ đầu, trả về path vừa train
+        """
+        tw = self._teacher_weights
+
+        # ── Có config path → dùng sẵn, skip stage 1 ─────────────────────────
+        if tw is not None:
+            p = Path(tw)
+            if p.exists():
+                logger.info(
+                    f"[CAGI] cagi_teacher_weights={p} — bỏ qua stage 1, "
+                    "dùng teacher đã train sẵn."
+                )
+                return p
+            # File không tồn tại → dừng hẳn, không âm thầm train lại
+            raise FileNotFoundError(
+                f"[CAGI] cagi_teacher_weights='{tw}' nhưng file không tồn tại. "
+                "Kiểm tra lại path hoặc đặt cagi_teacher_weights=null để train từ đầu."
+            )
+
+        # ── Không có config → train stage 1 ──────────────────────────────────
+        logger.info("[CAGI] Giai đoạn 1/4: Train Teacher (full model)")
+        self._yolo.train(
+            data=data, epochs=epochs, batch=batch, imgsz=imgsz,
+            device=device, project=project, name=f"{name}_teacher",
+            val=True, **kwargs,
+        )
+        # Lấy path thực tế từ trainer (xử lý đúng khi ultralytics tự increment tên)
+        teacher_save_dir = Path(self._yolo.trainer.save_dir)
+        teacher_best     = teacher_save_dir / "weights" / "best.pt"
+        logger.info(f"[CAGI] Stage 1 done → {teacher_save_dir}")
+        return teacher_best
 
     def _get_stage1_channels(self) -> int:
         try:
@@ -351,30 +404,20 @@ class CAGIModel(BaseModel):
         # Gỡ inference hook trước khi train (trainer tự quản lý hook riêng)
         self._remove_scp_hook()
 
-        # ── Giai đoạn 1: Train Teacher ────────────────────────────────────────
-        logger.info("[CAGI] Giai đoạn 1/4: Train Teacher (full model)")
-        self._yolo.train(
+        # ── Giai đoạn 1: Train Teacher (hoặc load sẵn) ───────────────────────
+        teacher_best = self._resolve_teacher_weights(
             data=data, epochs=epochs, batch=batch, imgsz=imgsz,
-            device=device, project=project, name=f"{name}_teacher",
-            val=True, **kwargs,
+            device=device, project=project, name=name, kwargs=kwargs,
         )
-        # Lấy path thực tế từ trainer — xử lý đúng mọi trường hợp ultralytics
-        # tự increment tên (vd: name_teacher2, name_teacher3, ...)
-        teacher_save_dir = Path(self._yolo.trainer.save_dir)
-        teacher_best     = teacher_save_dir / "weights" / "best.pt"
-        logger.info(f"[CAGI] Stage 1 done → {teacher_save_dir}")
 
-        if teacher_best.exists():
+        if teacher_best is not None and teacher_best.exists():
             logger.info(f"[CAGI] Load teacher weights: {teacher_best}")
             self._yolo = YOLO(str(teacher_best))
             # Re-wire gating vào model vừa load (model cũ đã bị replace)
             self._gated_blocks = []
             self._wrap_gated_stage()
         else:
-            logger.warning(
-                f"[CAGI] Teacher best.pt không tìm thấy tại {teacher_best}. "
-                "Dùng model hiện tại."
-            )
+            logger.warning("[CAGI] Không có teacher weights — dùng model hiện tại.")
 
         # ── Giai đoạn 3: Fine-tune với budget loss ───────────────────────────
         ft_epochs = max(20, epochs // 5)
