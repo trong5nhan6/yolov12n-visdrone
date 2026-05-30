@@ -45,10 +45,10 @@ head:
   # ── FPN top-down (layers 9-14, near-identical to YOLOv12n baseline) ───────
   - [-1,     1, nn.Upsample, [None, 2, 'nearest']]  # 9  — upsample P5 → 40×40
   - [[-1, 6], 1, Concat, [1]]                        # 10 — cat(256+128)=384ch
-  - [-1,     1, A2C2f,  [128, False, -1]]            # 11 — 128ch (P4 FPN output)
+  - [-1,     1, C3k2,  [128, 1, False]]              # 11 — 128ch (P4 FPN output)
   - [-1,     1, nn.Upsample, [None, 2, 'nearest']]  # 12 — upsample → 80×80
   - [[-1, 4], 1, Concat, [1]]                        # 13 — cat(128+128)=256ch
-  - [-1,     1, A2C2f,  [64, False, -1]]             # 14 — 64ch  (P3 FPN output) ← P3 detect-base
+  - [-1,     1, C3k2,  [64, 1, False]]               # 14 — 64ch  (P3 FPN output) ← P3 detect-base
 
   # ── P2 branch: upsample P3 → fuse với backbone P2 (160×160) ──────────────
   - [14,     1, nn.Upsample, [None, 2, 'nearest']]  # 15 — upsample P3 → 160×160 (64ch)

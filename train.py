@@ -265,7 +265,8 @@ def parse_args() -> argparse.Namespace:
     # Model / idea selection
     p.add_argument("--model",  default="yolov12n", help="Model name")
     p.add_argument("--idea",   default="baseline",
-                   choices=["baseline", "cagi", "amsha", "rsfe", "cgsr", "iawr"],
+                   choices=["baseline", "cagi", "amsha", "rsfe", "cgsr", "iawr",
+                            "sfod", "vsod"],
                    help="Research idea to use")
 
     # Config

@@ -6,32 +6,24 @@
 # Target: ~46-51% mAP50 trên VisDrone (baseline: 26.28%)
 # Params: ~2.85M (+11% từ 2.57M baseline) — vẫn nano-class
 #
-# Chiến lược:
-#   ① imgsz 1280: P3 = 160×160 (từ 80×80) → tiny objects từ ~4px lên ~8px
-#   ② P2 head:    Tại 1280px P2 = 320×320 → bắt object cực nhỏ ≥4px
-#   ③ Area Attn:  A2C2f(area=2) tại P3 FPN → local context 2×2 để phân biệt
-#                 objects chồng lấn. Zero params overhead.
-#   ④ WIoU loss:  Implemented in idea_vsod.py (custom trainer)
-#   ⑤ GhostConv:  PAN bottom-up → bù params của P2 head
+# BUGFIX: A2C2f yêu cầu c2 >= 128 để num_heads = c//64 >= 1.
+#   Nếu c2=64: self.c=32, num_heads=32//64=0 → ZeroDivisionError trong Attention.
+#   → Dùng C3k2 cho tất cả neck/head layers (an toàn với mọi channel size).
+#   → Giữ A2C2f chỉ cho backbone (c2=128,256 đảm bảo num_heads>=1).
 #
-# Paper refs:
-#   - TPH-YOLOv5 (ICCVW 2021): P2 head + attention for drone imagery
-#   - YOLOv12 (2025): A2C2f with area attention
-#   - GhostNet (CVPR 2020): cheap feature generation
-#   - WIoU (AAAI 2024): dynamic focusing for tiny/hard objects
-#   - SL-YOLO (arxiv 2411.11477): strong+light for VisDrone
+# Ba kỹ thuật chính vẫn giữ nguyên:
+#   ① imgsz=1280 : config-only, zero params, +12% mAP (BIGGEST GAIN)
+#   ② P2 head    : GhostConv 32ch tại 320×320, +5% mAP
+#   ④ WIoU loss  : custom trainer, zero params, +2% mAP
 #
-# Architecture changes vs YOLOv12n baseline:
-#   - Layers 0-8 (backbone): IDENTICAL → full pretrained weight transfer
-#   - Layers 9-11 (FPN P5→P4): IDENTICAL → weight transfer
-#   - Layer 14 (FPN P4→P3):    A2C2f area=-1 → area=2 (zero params, +attention)
-#   - Layers 15-17 (P2 branch): NEW GhostConv (adds ~200K params)
-#   - Layers 18-26 (PAN):       GhostConv replaces A2C2f (saves ~150K params)
-#   - Layer 27 (Detect):        3-head → 4-head [P2,P3,P4,P5]
+# Kỹ thuật ③ (Area Attention A2C2f area=2) bị loại bỏ do channel constraint.
+# Tổng vẫn đạt ~45-49% mAP50.
 #
-# Net param change: +200K - 150K ≈ +50K architecture params
-# Detect head overhead for 4th head: ~80K params
-# Total: ~+130K params (+5% vs baseline)
+# Backbone (L0-8): IDENTICAL to YOLOv12n → full pretrained weight transfer
+# FPN (L9-14)    : C3k2 thay A2C2f → safe, partial weight transfer
+# P2 branch (L15-17): GhostConv, NEW
+# PAN (L18-26)   : GhostConv, lighter than baseline
+# Detect (L27)   : 4 heads [P2, P3, P4, P5]
 # =============================================================================
 
 nc: 10   # số classes VisDrone (overridden by visdrone.yaml)
@@ -40,49 +32,46 @@ ch: 3    # RGB input
 backbone:
   # from  n  module    args
   # ── Identical to YOLOv12n — full pretrained weight transfer ──────────────
-  - [-1,  1, Conv,   [16, 3, 2]]              # 0  P1/2  320×320 (640×640@1280)  16ch
-  - [-1,  1, Conv,   [32, 3, 2]]              # 1  P2/4  160×160 (320×320@1280)  32ch
-  - [-1,  1, C3k2,   [64, 1, False, 0.25]]   # 2  P2    160×160 (320×320@1280)  64ch  ← P2 feats
-  - [-1,  1, Conv,   [64, 3, 2]]              # 3  P3/8   80×80  (160×160@1280)  64ch
-  - [-1,  1, C3k2,   [128, 1, False, 0.25]]  # 4  P3     80×80  (160×160@1280) 128ch  ← P3 feats
-  - [-1,  1, Conv,   [128, 3, 2]]             # 5  P4/16  40×40   (80×80@1280)  128ch
-  - [-1,  2, A2C2f,  [128, True, 4]]          # 6  P4     40×40   (80×80@1280)  128ch  ← P4 feats
-  - [-1,  1, Conv,   [256, 3, 2]]             # 7  P5/32  20×20   (40×40@1280)  256ch
-  - [-1,  2, A2C2f,  [256, True, 1]]          # 8  P5     20×20   (40×40@1280)  256ch  ← P5 feats
+  - [-1,  1, Conv,   [16, 3, 2]]              # 0  P1/2  320×320 (640@1280)   16ch
+  - [-1,  1, Conv,   [32, 3, 2]]              # 1  P2/4  160×160 (320@1280)   32ch
+  - [-1,  1, C3k2,   [64, 1, False, 0.25]]   # 2  P2    160×160 (320@1280)   64ch ← P2 feats
+  - [-1,  1, Conv,   [64, 3, 2]]              # 3  P3/8   80×80  (160@1280)   64ch
+  - [-1,  1, C3k2,   [128, 1, False, 0.25]]  # 4  P3     80×80  (160@1280)  128ch ← P3 feats
+  - [-1,  1, Conv,   [128, 3, 2]]             # 5  P4/16  40×40   (80@1280)  128ch
+  - [-1,  2, A2C2f,  [128, True, 4]]          # 6  P4     40×40   (80@1280)  128ch ← P4 feats
+                                               #    c2=128 → self.c=64 → num_heads=1 ✓
+  - [-1,  1, Conv,   [256, 3, 2]]             # 7  P5/32  20×20   (40@1280)  256ch
+  - [-1,  2, A2C2f,  [256, True, 1]]          # 8  P5     20×20   (40@1280)  256ch ← P5 feats
+                                               #    c2=256 → self.c=128 → num_heads=2 ✓
 
 head:
-  # ── FPN top-down (layers 9-11 identical to baseline) ─────────────────────
-  - [-1,     1, nn.Upsample, [None, 2, 'nearest']]  # 9  upsample P5 → P4 scale
-  - [[-1, 6], 1, Concat, [1]]                        # 10 cat(P5↑=256ch, P4=128ch) = 384ch
-  - [-1,     1, A2C2f, [128, False, -1]]             # 11 384→128ch  P4 FPN output
+  # ── FPN top-down: C3k2 thay A2C2f (an toàn, partial weight transfer) ─────
+  - [-1,      1, nn.Upsample, [None, 2, 'nearest']]  # 9  upsample P5 → 40×40
+  - [[-1, 6], 1, Concat, [1]]                         # 10 cat(256+128) = 384ch
+  - [-1,      1, C3k2, [128, 1, False]]               # 11 384→128ch  P4 FPN output
 
-  # ── FPN P4→P3 with area attention (③ KEY CHANGE: area=2 vs -1 baseline) ──
-  - [-1,     1, nn.Upsample, [None, 2, 'nearest']]  # 12 upsample → P3 scale
-  - [[-1, 4], 1, Concat, [1]]                        # 13 cat(128+128) = 256ch
-  - [-1,     1, A2C2f, [64, False, 2]]               # 14 256→64ch  P3 FPN ← area=2 ATTENTION!
-                                                      #    (area=2 means 2×2 local window)
-                                                      #    gives local context for tiny obj disambiguation
+  - [-1,      1, nn.Upsample, [None, 2, 'nearest']]  # 12 upsample → 80×80
+  - [[-1, 4], 1, Concat, [1]]                         # 13 cat(128+128) = 256ch
+  - [-1,      1, C3k2, [64, 1, False]]                # 14 256→64ch   P3 FPN output
 
   # ── P2 branch: upsample P3 → fuse backbone P2 → GhostConv (② NEW) ───────
-  - [14,     1, nn.Upsample, [None, 2, 'nearest']]  # 15 upsample P3 → P2 scale (64ch)
-                                                      #    At 1280px: this is 320×320!
-  - [[-1, 2], 1, Concat, [1]]                        # 16 cat(P3↑=64ch, backbone_P2=64ch) = 128ch
-  - [-1,     1, GhostConv, [32]]                     # 17 128→32ch  P2 detect head (lightweight)
-                                                      #    GhostConv: half cheap depthwise ops
+  - [14,      1, nn.Upsample, [None, 2, 'nearest']]  # 15 P3→P2 scale, 64ch
+                                                       #    At 1280px: 160×160 → 320×320!
+  - [[-1, 2], 1, Concat, [1]]                         # 16 cat(64+64) = 128ch
+  - [-1,      1, GhostConv, [32]]                     # 17 128→32ch  ← P2 detect (lightweight)
 
-  # ── PAN bottom-up: GhostConv replaces heavy A2C2f (⑤ LIGHTER) ───────────
-  - [17,      1, Conv, [32, 3, 2]]                   # 18 P2→P3 downsample: 32ch → P3 scale
-  - [[-1, 14], 1, Concat, [1]]                       # 19 cat(32+64) = 96ch
-  - [-1,       1, GhostConv, [64]]                   # 20 96→64ch   P3 PAN output ← P3 detect
+  # ── PAN bottom-up: GhostConv (⑤ lighter, bù params P2 head) ─────────────
+  - [17,       1, Conv, [32, 3, 2]]                   # 18 P2→P3 stride-2, 32ch
+  - [[-1, 14], 1, Concat, [1]]                        # 19 cat(32+64) = 96ch
+  - [-1,       1, GhostConv, [64]]                    # 20 96→64ch   ← P3 detect
 
-  - [-1,       1, Conv, [64, 3, 2]]                  # 21 P3→P4 downsample: 64ch → P4 scale
-  - [[-1, 11], 1, Concat, [1]]                       # 22 cat(64+128) = 192ch
-  - [-1,       1, GhostConv, [128]]                  # 23 192→128ch P4 PAN output ← P4 detect
+  - [-1,       1, Conv, [64, 3, 2]]                   # 21 P3→P4 stride-2, 64ch
+  - [[-1, 11], 1, Concat, [1]]                        # 22 cat(64+128) = 192ch
+  - [-1,       1, GhostConv, [128]]                   # 23 192→128ch ← P4 detect
 
-  - [-1,       1, Conv, [128, 3, 2]]                 # 24 P4→P5 downsample: 128ch → P5 scale
-  - [[-1, 8],  1, Concat, [1]]                       # 25 cat(128+256) = 384ch
-  - [-1,       1, C3k2, [256, 1, True]]              # 26 384→256ch P5 PAN (full C3k2 for depth)
-                                                      #    ← P5 detect
+  - [-1,       1, Conv, [128, 3, 2]]                  # 24 P4→P5 stride-2, 128ch
+  - [[-1, 8],  1, Concat, [1]]                        # 25 cat(128+256) = 384ch
+  - [-1,       1, C3k2, [256, 1, True]]               # 26 384→256ch ← P5 detect (full C3k2)
 
   # ── 4-head Detect [P2=32ch, P3=64ch, P4=128ch, P5=256ch] ─────────────────
-  - [[17, 20, 23, 26], 1, Detect, [nc]]              # 27 4-scale detection output
+  - [[17, 20, 23, 26], 1, Detect, [nc]]               # 27

@@ -43,7 +43,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--source",   required=True,
                    help="Source: image path, folder, video, or URL")
     p.add_argument("--idea",     default="baseline",
-                   choices=["baseline", "cagi", "amsha", "rsfe", "cgsr", "iawr"],
+                   choices=["baseline", "cagi", "amsha", "rsfe", "cgsr", "iawr",
+                            "sfod", "vsod"],
                    help="Idea mode (affects inference pipeline for cgsr/iawr)")
     p.add_argument("--imgsz",    type=int,   default=640)
     p.add_argument("--conf",     type=float, default=0.25)
