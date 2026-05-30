@@ -1,0 +1,31 @@
+# configs/vsod.yaml
+# =============================================================================
+# VSOD Experiment Config — VisDrone-Specialized Object Detector
+# Target: ~46-51% mAP50 (baseline: 26.28%)
+# =============================================================================
+model: yolov12n
+idea: vsod
+pretrained: yolo12n.pt
+epochs: 150
+batch_size: 8          # giảm từ 16 → 8 vì imgsz tăng 2x (VRAM ×4 per image)
+name: yolov12n_vsod
+
+# ── VSOD-specific ─────────────────────────────────────────────────────────────
+vsod_arch_yaml: configs/yolov12n_vsod.yaml
+vsod_freeze_backbone: false          # true = chỉ train head (nhanh hơn, acc thấp hơn)
+vsod_wiou_alpha: 2.0                 # WIoU focusing strength (1.0=off, 2.0=medium, 4.0=strong)
+vsod_wiou_beta: 0.6                  # WIoU momentum cho running mean of distances
+
+# ── Training resolution (① BIGGEST GAIN) ─────────────────────────────────────
+# imgsz PHẢI override qua CLI --imgsz 1280, hoặc truyền vào train()
+# Không đặt ở đây vì base.yaml có img_size=640 làm default
+# Notebook và train command sẽ truyền --imgsz 1280
+
+# ── Augmentation tuned cho tiny objects ─────────────────────────────────────
+# (override base.yaml defaults)
+copy_paste: 0.5        # tăng từ 0.3 → 0.5: copy-paste objects nhỏ nhiều hơn
+close_mosaic: 30       # tăng từ 20 → 30: giữ mosaic lâu hơn (quan trọng cho tiny)
+scale: 0.9             # scale jitter mạnh (giữ nguyên)
+mosaic: 1.0            # mosaic ON toàn bộ training (giữ)
+flipud: 0.5            # drone không có hướng cố định (giữ)
+mixup: 0.15            # tăng nhẹ mixup để thêm variety

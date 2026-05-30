@@ -1,0 +1,70 @@
+# configs/yolov12n_sfod.yaml
+# =============================================================================
+# YOLOv12n-SFOD: Small Feature-enhanced Object Detector
+# =============================================================================
+#
+# Cải tiến so với YOLOv12n baseline:
+#   1. P2 detection head (stride=4, 160×160) — detect vật thể rất nhỏ
+#      (inspired by TPH-YOLOv5, BGF-YOLOv10)
+#   2. GhostConv trong PAN neck — giảm ~40% params của neck
+#      (inspired by GhostNet CVPR2020, BGF-YOLOv10)
+#   3. 4-head Detect: [P2(32ch), P3(64ch), P4(128ch), P5(256ch)]
+#
+# Paper references:
+#   - TPH-YOLOv5 (ICCVW 2021): P2 head + transformer for drone detection
+#   - GhostNet (CVPR 2020): cheap operations to replace standard conv
+#   - BGF-YOLOv10 (2024): GhostConv in backbone+head for drone UAV detection
+#   - Gold-YOLO (NeurIPS 2023): efficient multi-scale feature fusion
+#
+# Architecture notes:
+#   - Backbone (layers 0-8): IDENTICAL to YOLOv12n → full weight transfer
+#   - FPN top-down (layers 9-14): near-identical → partial weight transfer
+#   - P2 branch (layers 15-17): NEW, GhostConv lightweight
+#   - PAN bottom-up (layers 18-26): GhostConv replaces A2C2f → fewer params
+#   - Detect (layer 27): 4 heads instead of 3
+#
+# Channels hardcoded (no scales multiplier) to match yolov12n.pt exactly.
+# =============================================================================
+
+nc: 10   # overridden by visdrone.yaml at train time
+ch: 3    # input channels (RGB)
+
+backbone:
+  # from  repeats  module     args
+  - [-1,  1, Conv,   [16, 3, 2]]              # 0  — P1/2,  320×320, 16ch
+  - [-1,  1, Conv,   [32, 3, 2]]              # 1  — P2/4,  160×160, 32ch
+  - [-1,  1, C3k2,   [64, 1, False, 0.25]]   # 2  — P2,    160×160, 64ch  ← save (P2 backbone feats)
+  - [-1,  1, Conv,   [64, 3, 2]]              # 3  — P3/8,   80×80,  64ch
+  - [-1,  1, C3k2,   [128, 1, False, 0.25]]  # 4  — P3,     80×80, 128ch  ← save (P3 backbone feats)
+  - [-1,  1, Conv,   [128, 3, 2]]             # 5  — P4/16,  40×40, 128ch
+  - [-1,  2, A2C2f,  [128, True, 4]]          # 6  — P4,     40×40, 128ch  ← save (P4 feats)
+  - [-1,  1, Conv,   [256, 3, 2]]             # 7  — P5/32,  20×20, 256ch
+  - [-1,  2, A2C2f,  [256, True, 1]]          # 8  — P5,     20×20, 256ch  ← save (P5 feats)
+
+head:
+  # ── FPN top-down (layers 9-14, near-identical to YOLOv12n baseline) ───────
+  - [-1,     1, nn.Upsample, [None, 2, 'nearest']]  # 9  — upsample P5 → 40×40
+  - [[-1, 6], 1, Concat, [1]]                        # 10 — cat(256+128)=384ch
+  - [-1,     1, A2C2f,  [128, False, -1]]            # 11 — 128ch (P4 FPN output)
+  - [-1,     1, nn.Upsample, [None, 2, 'nearest']]  # 12 — upsample → 80×80
+  - [[-1, 4], 1, Concat, [1]]                        # 13 — cat(128+128)=256ch
+  - [-1,     1, A2C2f,  [64, False, -1]]             # 14 — 64ch  (P3 FPN output) ← P3 detect-base
+
+  # ── P2 branch: upsample P3 → fuse với backbone P2 (160×160) ──────────────
+  - [14,     1, nn.Upsample, [None, 2, 'nearest']]  # 15 — upsample P3 → 160×160 (64ch)
+  - [[-1, 2], 1, Concat, [1]]                        # 16 — cat(64+64)=128ch  (P3↑ + backbone P2)
+  - [-1,     1, GhostConv, [32]]                     # 17 — 32ch (P2 head, lightweight) ← P2 detect
+
+  # ── PAN bottom-up: GhostConv replaces heavy A2C2f to reduce params ────────
+  - [17,      1, Conv, [32, 3, 2]]                   # 18 — P2→P3 downsample: 32ch, 80×80
+  - [[-1, 14], 1, Concat, [1]]                       # 19 — cat(32+64)=96ch
+  - [-1,       1, GhostConv, [64]]                   # 20 — 64ch (P3 PAN) ← P3 detect-pan
+  - [-1,       1, Conv, [64, 3, 2]]                  # 21 — P3→P4: 64ch, 40×40
+  - [[-1, 11], 1, Concat, [1]]                       # 22 — cat(64+128)=192ch
+  - [-1,       1, GhostConv, [128]]                  # 23 — 128ch (P4 PAN) ← P4 detect
+  - [-1,       1, Conv, [128, 3, 2]]                 # 24 — P4→P5: 128ch, 20×20
+  - [[-1, 8],  1, Concat, [1]]                       # 25 — cat(128+256)=384ch
+  - [-1,       1, C3k2, [256, 1, True]]              # 26 — 256ch (P5 PAN, full C3k2 for deepest feats) ← P5 detect
+
+  # ── 4-head Detect: P2(32ch), P3(64ch), P4(128ch), P5(256ch) ─────────────
+  - [[17, 20, 23, 26], 1, Detect, [nc]]              # 27 — 4-scale detection

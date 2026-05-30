@@ -9,6 +9,8 @@ from models.idea_amsha import AMSHAModel
 from models.idea_rsfe import RSFEModel
 from models.idea_cgsr import CGSRModel
 from models.idea_iawr import IAWRModel
+from models.idea_sfod import SFODModel
+from models.idea_vsod import VSODModel
 
 # ---------------------------------------------------------------------------
 # Registry: key = (model, idea)  →  value = model class
@@ -21,6 +23,8 @@ MODEL_REGISTRY: dict = {
     ("yolov12n", "rsfe"):     RSFEModel,
     ("yolov12n", "cgsr"):     CGSRModel,
     ("yolov12n", "iawr"):     IAWRModel,
+    ("yolov12n", "sfod"):     SFODModel,   # Small Feature-enhanced Object Detector
+    ("yolov12n", "vsod"):     VSODModel,   # VisDrone-Specialized Object Detector (target ~50%)
 }
 
 
@@ -59,4 +63,6 @@ __all__ = [
     "RSFEModel",
     "CGSRModel",
     "IAWRModel",
+    "SFODModel",
+    "VSODModel",
 ]

@@ -1,0 +1,15 @@
+# configs/sfod.yaml
+# =============================================================================
+# SFOD Experiment Config — Small Feature-enhanced Object Detector
+# =============================================================================
+model: yolov12n
+idea: sfod
+pretrained: yolo12n.pt   # backbone weights transferred từ đây
+epochs: 120
+batch_size: 16
+name: yolov12n_sfod
+
+# SFOD-specific params
+sfod_arch_yaml: configs/yolov12n_sfod.yaml   # custom 4-head architecture
+sfod_freeze_backbone: false                   # true = chỉ train head, không train backbone
+sfod_p2_loss_weight: 1.0                     # weight cho P2 head loss (1.0 = ngang bằng head khác)
